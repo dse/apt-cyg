@@ -25,7 +25,7 @@
 
 if [ ${BASH_VERSINFO}${BASH_VERSINFO[1]} -lt 42 ] ; then
     echo 'Bash version 4.2+ required'
-    exit
+    exit 1
 fi
 
 usage="\
@@ -118,8 +118,7 @@ Copyright (c) 2005-9 Stephen Jungels
 "
 
 function wget {
-    if command wget -h &>/dev/null
-    then
+    if command wget -h &>/dev/null ; then
         command wget "$@"
     else
         warn wget is not installed, using lynx as fallback
@@ -133,30 +132,29 @@ function find-workspace {
     
     # work wherever setup worked last, if possible
     cache=$(awk '
-  BEGIN {
-    RS = "\n\\<"
-    FS = "\n\t"
-  }
-  $1 == "last-cache" {
-    print $2
-  }
-  ' /etc/setup/setup.rc)
+        BEGIN {
+            RS = "\n\\<"
+            FS = "\n\t"
+        }
+        $1 == "last-cache" {
+            print $2
+        }
+    ' /etc/setup/setup.rc)
 
     mirror=$(awk '
-  /last-mirror/ {
-    getline
-    print $1
-  }
-  ' /etc/setup/setup.rc)
+        /last-mirror/ {
+            getline
+            print $1
+        }
+    ' /etc/setup/setup.rc)
     mirrordir=$(sed '
-  s / %2f g
-  s : %3a g
-  ' <<< "$mirror")
+        s / %2f g
+        s : %3a g
+    ' <<< "$mirror")
 
     mkdir -p "$cache/$mirrordir/$arch"
     cd "$cache/$mirrordir/$arch"
-    if [ -e setup.ini ]
-    then
+    if [ -e setup.ini ] ; then
         return 0
     else
         get-setup
@@ -168,8 +166,7 @@ function get-setup {
     touch setup.ini
     mv setup.ini setup.ini-save
     wget -N $mirror/$arch/setup.bz2
-    if [ -e setup.bz2 ]
-    then
+    if [ -e setup.bz2 ] ; then
         bunzip2 setup.bz2
         mv setup setup.ini
         echo Updated setup.ini
@@ -180,8 +177,7 @@ function get-setup {
 }
 
 function check-packages {
-    if [[ $pks ]]
-    then
+    if [[ $pks ]] ; then
         return 0
     else
         echo No packages found.
@@ -194,8 +190,7 @@ function warn {
 }
 
 function apt-update {
-    if find-workspace
-    then
+    if find-workspace ; then
         get-setup
     fi
 }
@@ -203,23 +198,21 @@ function apt-update {
 function apt-category {
     check-packages
     find-workspace
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         awk '
-    $1 == "@" {
-      pck = $2
-    }
-    $1 == "category:" && $0 ~ query {
-      print pck
-    }
-    ' query="$pks" setup.ini
+            $1 == "@" {
+                pck = $2
+            }
+            $1 == "category:" && $0 ~ query {
+                print pck
+            }
+        ' query="$pks" setup.ini
     done
 }
 
 function apt-list {
     local sbq
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         let sbq++ && echo
         awk 'NR>1 && $1~pkg && $0=$1' pkg="$pkg" /etc/setup/installed.db
     done
@@ -231,8 +224,7 @@ function apt-listall {
     check-packages
     find-workspace
     local sbq
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         let sbq++ && echo
         awk '$1~pkg && $0=$1' RS='\n\n@ ' FS='\n' pkg="$pkg" setup.ini
     done
@@ -242,11 +234,9 @@ function apt-listfiles {
     check-packages
     find-workspace
     local pkg sbq
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         (( sbq++ )) && echo
-        if [ ! -e /etc/setup/"$pkg".lst.gz ]
-        then
+        if [ ! -e /etc/setup/"$pkg".lst.gz ] ; then
             download "$pkg"
         fi
         gzip -cd /etc/setup/"$pkg".lst.gz
@@ -256,88 +246,85 @@ function apt-listfiles {
 function apt-show {
     find-workspace
     check-packages
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         (( notfirst++ )) && echo
         awk '
-    $1 == query {
-      print
-      fd++
-    }
-    END {
-      if (! fd)
-        print "Unable to locate package " query
-    }
-    ' RS='\n\n@ ' FS='\n' query="$pkg" setup.ini
+            $1 == query {
+                print
+                fd++
+            }
+            END {
+                if (! fd)
+                    print "Unable to locate package " query
+            }
+        ' RS='\n\n@ ' FS='\n' query="$pkg" setup.ini
     done
 }
 
 function apt-depends {
     find-workspace
     check-packages
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         awk '
-    @include "join"
-    $1 == "@" {
-      apg = $2
-    }
-    $1 == "requires:" {
-      for (z=2; z<=NF; z++)
-        reqs[apg][z-1] = $z
-    }
-    END {
-      prpg(ENVIRON["pkg"])
-    }
-    function smartmatch(small, large,    values) {
-      for (each in large)
-        values[large[each]]
-      return small in values
-    }
-    function prpg(fpg) {
-      if (smartmatch(fpg, spath)) return
-      spath[length(spath)+1] = fpg
-      print join(spath, 1, length(spath), " > ")
-      if (isarray(reqs[fpg]))
-        for (each in reqs[fpg])
-          prpg(reqs[fpg][each])
-      delete spath[length(spath)]
-    }
-    ' setup.ini
+            @include "join"
+            $1 == "@" {
+                apg = $2
+            }
+            $1 == "requires:" {
+                for (z=2; z<=NF; z++)
+                    reqs[apg][z-1] = $z
+            }
+            END {
+                prpg(ENVIRON["pkg"])
+            }
+            function smartmatch(small, large,    values) {
+                for (each in large)
+                    values[large[each]]
+                return small in values
+            }
+            function prpg(fpg) {
+                if (smartmatch(fpg, spath)) return
+                spath[length(spath)+1] = fpg
+                print join(spath, 1, length(spath), " > ")
+                if (isarray(reqs[fpg]))
+                    for (each in reqs[fpg])
+                        prpg(reqs[fpg][each])
+                delete spath[length(spath)]
+            }
+        ' setup.ini
     done
 }
 
 function apt-rdepends {
     find-workspace
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         awk '
-    @include "join"
-    $1 == "@" {
-      apg = $2
-    }
-    $1 == "requires:" {
-      for (z=2; z<=NF; z++)
-        reqs[$z][length(reqs[$z])+1] = apg
-    }
-    END {
-      prpg(ENVIRON["pkg"])
-    }
-    function smartmatch(small, large,    values) {
-      for (each in large)
-        values[large[each]]
-      return small in values
-    }
-    function prpg(fpg) {
-      if (smartmatch(fpg, spath)) return
-      spath[length(spath)+1] = fpg
-      print join(spath, 1, length(spath), " < ")
-      if (isarray(reqs[fpg]))
-        for (each in reqs[fpg])
-          prpg(reqs[fpg][each])
-      delete spath[length(spath)]
-    }
-    ' setup.ini
+            @include "join"
+            $1 == "@" {
+                apg = $2
+            }
+            $1 == "requires:" {
+                for (z=2; z<=NF; z++)
+                    reqs[$z][length(reqs[$z])+1] = apg
+            }
+            END {
+                prpg(ENVIRON["pkg"])
+            }
+            function smartmatch(small, large,    values) {
+                for (each in large)
+                    values[large[each]]
+                return small in values
+            }
+            function prpg(fpg) {
+                if (smartmatch(fpg, spath)) return
+                spath[length(spath)+1] = fpg
+                print join(spath, 1, length(spath), " < ")
+                if (isarray(reqs[fpg]))
+                    for (each in reqs[fpg])
+                        prpg(reqs[fpg][each])
+                delete spath[length(spath)]
+            }
+        ' setup.ini
     done
 }
 
@@ -345,8 +332,7 @@ function apt-download {
     check-packages
     find-workspace
     local pkg sbq
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         (( sbq++ )) && echo
         download "$pkg"
     done
@@ -358,8 +344,7 @@ function download {
     # look for package and save desc file
 
     awk '$1 == pc' RS='\n\n@ ' FS='\n' pc=$pkg setup.ini > desc
-    if [ ! -s desc ]
-    then
+    if [ ! -s desc ] ; then
         echo Unable to locate package $pkg
         exit 1
     fi
@@ -368,8 +353,7 @@ function download {
 
     # pick the latest version, which comes first
     set -- $(awk '$1 == "install:"' desc)
-    if (( ! $# ))
-    then
+    if (( ! $# )) ; then
         echo 'Could not find "install" in package description: obsolete package?'
         exit 1
     fi
@@ -385,8 +369,7 @@ function download {
     esac
     mkdir -p "$cache/$mirrordir/$dn"
     cd "$cache/$mirrordir/$dn"
-    if ! test -e $bn || ! $hash -c <<< "$digest $bn"
-    then
+    if ! test -e $bn || ! $hash -c <<< "$digest $bn" ; then
         wget -O $bn $mirror/$dn/$bn
         $hash -c <<< "$digest $bn" || exit
     fi
@@ -400,14 +383,11 @@ function download {
 function apt-search {
     check-packages
     echo Searching downloaded packages...
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         key=$(type -P "$pkg" | sed s./..)
         [[ $key ]] || key=$pkg
-        for manifest in /etc/setup/*.lst.gz
-        do
-            if gzip -cd $manifest | grep -q "$key"
-            then
+        for manifest in /etc/setup/*.lst.gz ; do
+            if gzip -cd $manifest | grep -q "$key" ; then
                 package=$(sed '
         s,/etc/setup/,,
         s,.lst.gz,,
@@ -420,17 +400,16 @@ function apt-search {
 
 function apt-searchall {
     cd /tmp
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
         printf -v qs 'text=1&arch=%s&grep=%s' $arch "$pkg"
         wget -O matches cygwin.com/cgi-bin2/package-grep.cgi?"$qs"
         awk '
-    NR == 1 {next}
-    mc[$1]++ {next}
-    /-debuginfo-/ {next}
-    /^cygwin32-/ {next}
-    {print $1}
-    ' FS=-[[:digit:]] matches
+            NR == 1 {next}
+            mc[$1]++ {next}
+            /-debuginfo-/ {next}
+            /^cygwin32-/ {next}
+            {print $1}
+        ' FS=-[[:digit:]] matches
     done
 }
 
@@ -438,11 +417,9 @@ function apt-install {
     check-packages
     find-workspace
     local pkg dn bn requires wr package sbq script
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
 
-        if grep -q "^$pkg " /etc/setup/installed.db
-        then
+        if grep -q "^$pkg " /etc/setup/installed.db ; then
             echo Package $pkg is already installed, skipping
             continue
         fi
@@ -458,15 +435,15 @@ function apt-install {
         # update the package database
 
         awk '
-  ins != 1 && pkg < $1 {
-    print pkg, bz, 0
-    ins = 1
-  }
-  1
-  END {
-    if (ins != 1) print pkg, bz, 0
-  }
-  ' pkg="$pkg" bz=$bn /etc/setup/installed.db > /tmp/awk.$$
+            ins != 1 && pkg < $1 {
+                print pkg, bz, 0
+                ins = 1
+            }
+            1
+            END {
+                if (ins != 1) print pkg, bz, 0
+            }
+        ' pkg="$pkg" bz=$bn /etc/setup/installed.db > /tmp/awk.$$
         mv /etc/setup/installed.db /etc/setup/installed.db-save
         mv /tmp/awk.$$ /etc/setup/installed.db
 
@@ -476,30 +453,25 @@ function apt-install {
         requires=$(awk '$1=="requires", $0=$2' FS=': ' desc)
         cd ~-
         wr=0
-        if [[ $requires ]]
-        then
+        if [[ $requires ]] ; then
             echo Package $pkg requires the following packages, installing:
             echo $requires
-            for package in $requires
-            do
-                if grep -q "^$package " /etc/setup/installed.db
-                then
+            for package in $requires ; do
+                if grep -q "^$package " /etc/setup/installed.db ; then
                     echo Package $package is already installed, skipping
                     continue
                 fi
                 apt-cyg install --noscripts $package || (( wr++ ))
             done
         fi
-        if (( wr ))
-        then
+        if (( wr )) ; then
             echo some required packages did not install, continuing
         fi
 
         # run all postinstall scripts
 
         [ -v noscripts ] && continue
-        find /etc/postinstall -name '*.sh' | while read script
-        do
+        find /etc/postinstall -name '*.sh' | while read script ; do
             echo Running $script
             $script
             mv $script $script.done
@@ -513,46 +485,39 @@ function apt-remove {
     check-packages
     cd /etc
     cygcheck awk bash bunzip2 grep gzip mv sed tar xz > setup/essential.lst
-    for pkg in "${pks[@]}"
-    do
+    for pkg in "${pks[@]}" ; do
 
-        if ! grep -q "^$pkg " setup/installed.db
-        then
+        if ! grep -q "^$pkg " setup/installed.db ; then
             echo Package $pkg is not installed, skipping
             continue
         fi
 
-        if [ ! -e setup/"$pkg".lst.gz ]
-        then
+        if [ ! -e setup/"$pkg".lst.gz ] ; then
             warn Package manifest missing, cannot remove $pkg. Exiting
             exit 1
         fi
         gzip -dk setup/"$pkg".lst.gz
         awk '
-  NR == FNR {
-    if ($NF) ess[$NF]
-    next
-  }
-  $NF in ess {
-    exit 1
-  }
-  ' FS='[/\\\\]' setup/{essential,$pkg}.lst
+            NR == FNR {
+                if ($NF) ess[$NF]
+                next
+            }
+            $NF in ess {
+                exit 1
+            }
+        ' FS='[/\\\\]' setup/{essential,$pkg}.lst
         esn=$?
-        if [ $esn = 0 ]
-        then
+        if [ $esn = 0 ] ; then
             echo Removing $pkg
-            if [ -e preremove/"$pkg".sh ]
-            then
+            if [ -e preremove/"$pkg".sh ] ; then
                 preremove/"$pkg".sh
                 rm preremove/"$pkg".sh
             fi
             mapfile dt < setup/"$pkg".lst
-            for each in ${dt[*]}
-            do
+            for each in ${dt[*]} ; do
                 [ -f /$each ] && rm /$each
             done
-            for each in ${dt[*]}
-            do
+            for each in ${dt[*]} ; do
                 [ -d /$each ] && rmdir --i /$each
             done
             rm -f setup/"$pkg".lst.gz postinstall/"$pkg".sh.done
@@ -560,8 +525,7 @@ function apt-remove {
             echo Package $pkg removed
         fi
         rm setup/"$pkg".lst
-        if [ $esn = 1 ]
-        then
+        if [ $esn = 1 ] ; then
             warn apt-cyg cannot remove package $pkg, exiting
             exit 1
         fi
@@ -570,45 +534,43 @@ function apt-remove {
 }
 
 function apt-mirror {
-    if [ "$pks" ]
-    then
+    if [ "$pks" ] ; then
         awk -i inplace '
-    1
-    /last-mirror/ {
-      getline
-      print "\t" pks
-    }
-    ' pks="$pks" /etc/setup/setup.rc
+            1
+            /last-mirror/ {
+                getline
+                print "\t" pks
+            }
+        ' pks="$pks" /etc/setup/setup.rc
         echo Mirror set to "$pks".
     else
         awk '
-    /last-mirror/ {
-      getline
-      print $1
-    }
-    ' /etc/setup/setup.rc
+            /last-mirror/ {
+                getline
+                print $1
+            }
+        ' /etc/setup/setup.rc
     fi
 }
 
 function apt-cache {
-    if [ "$pks" ]
-    then
+    if [ "$pks" ] ; then
         vas=$(cygpath -aw "$pks")
         awk -i inplace '
-    1
-    /last-cache/ {
-      getline
-      print "\t" vas
-    }
-    ' vas="${vas//\\/\\\\}" /etc/setup/setup.rc
+            1
+            /last-cache/ {
+                getline
+                print "\t" vas
+            }
+        ' vas="${vas//\\/\\\\}" /etc/setup/setup.rc
         echo Cache set to "$vas".
     else
         awk '
-    /last-cache/ {
-      getline
-      print $1
-    }
-    ' /etc/setup/setup.rc
+            /last-cache/ {
+                getline
+                print $1
+            }
+        ' /etc/setup/setup.rc
     fi
 }
 
@@ -617,8 +579,7 @@ if [ -p /dev/stdin ] ; then
 fi
 
 # process options
-until [ $# = 0 ]
-do
+until [ $# = 0 ] ; do
     case "$1" in
 
         --nodeps)
@@ -643,8 +604,7 @@ do
 
         list | cache  | remove | depends | listall  | download | listfiles |\
             show | mirror | search | install | category | rdepends | searchall )
-            if [[ $command ]]
-            then
+            if [[ $command ]] ; then
                 pks+=("$1")
             else
                 command=$1
